@@ -17,6 +17,15 @@ import {
   FormHelperText,
   IconButton,
   InputAdornment,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  Card,
+  CardContent,
 } from '@mui/material';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
@@ -55,10 +64,15 @@ const ALL_FIELDS = [
   '0.3_um_count',
 ];
 
-const fieldOptions = ALL_FIELDS.map((field) => ({
-  value: field,
-  label: field,
-}));
+const SELECT_ALL_VALUE = '__select_all__';
+
+const fieldOptions = [
+  { value: SELECT_ALL_VALUE, label: 'Select All Fields' },
+  ...ALL_FIELDS.map((field) => ({
+    value: field,
+    label: field,
+  })),
+];
 
 export default function Home() {
   const theme = useTheme();
@@ -74,6 +88,7 @@ export default function Home() {
   const [success, setSuccess] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [downloadedData, setDownloadedData] = useState(null);
 
   const handleChange = (e) => {
     setFormData({
@@ -82,7 +97,6 @@ export default function Home() {
     });
     setError('');
     setSuccess('');
-    setDownloadUrl('');
   };
 
   const handleStartTimeChange = (newValue) => {
@@ -93,7 +107,6 @@ export default function Home() {
     });
     setError('');
     setSuccess('');
-    setDownloadUrl('');
   };
 
   const handleEndTimeChange = (newValue) => {
@@ -127,17 +140,34 @@ export default function Home() {
     }
     setError('');
     setSuccess('');
-    setDownloadUrl('');
   };
 
   const handleFieldsChange = (selectedOptions) => {
-    setFormData({
-      ...formData,
-      fields: selectedOptions || [],
-    });
+    const options = selectedOptions || [];
+    
+    // Check if "Select All" is in the selection
+    const hasSelectAll = options.some(option => option.value === SELECT_ALL_VALUE);
+    
+    // If "Select All" was clicked, select all fields
+    if (hasSelectAll) {
+      // Select all fields (excluding "Select All" from the stored value)
+      const allFieldsSelected = fieldOptions.filter(opt => opt.value !== SELECT_ALL_VALUE);
+      setFormData({
+        ...formData,
+        fields: allFieldsSelected,
+      });
+    } 
+    // Normal selection/deselection - exclude "Select All" from stored value
+    else {
+      const filteredOptions = options.filter(opt => opt.value !== SELECT_ALL_VALUE);
+      setFormData({
+        ...formData,
+        fields: filteredOptions,
+      });
+    }
+    
     setError('');
     setSuccess('');
-    setDownloadUrl('');
   };
 
   // Check if form is valid
@@ -170,9 +200,12 @@ export default function Home() {
     setError('');
     setSuccess('');
     setDownloadUrl('');
+    setDownloadedData(null);
 
-    // Convert selected options to array of field values
-    const fieldValues = formData.fields.map((option) => option.value);
+    // Convert selected options to array of field values, excluding "Select All"
+    const fieldValues = formData.fields
+      .map((option) => option.value)
+      .filter((value) => value !== SELECT_ALL_VALUE);
     
     // Convert dayjs objects to ISO 8601 strings
     const startTimestampISO = formData.startTimestamp.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
@@ -199,13 +232,59 @@ export default function Home() {
         throw new Error(data.error || 'Failed to download data');
       }
 
-      setSuccess('Data downloaded successfully!');
+      setSuccess('Data downloaded successfully! You can view the data in the table below. You can also download the data in JSON format or CSV format. ');
       setDownloadUrl(data.downloadUrl);
+      setDownloadedData(data.data);
     } catch (err) {
       setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Function to convert data to CSV format
+  const convertToCSV = (data) => {
+    if (!data || !data.fields || !data.data) {
+      return '';
+    }
+
+    // Create header row
+    const header = data.fields.join(',');
+    
+    // Create data rows
+    const rows = data.data.map(row => {
+      return row.map(cell => {
+        // Escape commas and quotes in CSV
+        const cellValue = String(cell);
+        if (cellValue.includes(',') || cellValue.includes('"') || cellValue.includes('\n')) {
+          return `"${cellValue.replace(/"/g, '""')}"`;
+        }
+        return cellValue;
+      }).join(',');
+    });
+
+    return [header, ...rows].join('\n');
+  };
+
+  // Function to download CSV
+  const handleDownloadCSV = () => {
+    if (!downloadedData) return;
+
+    const csvContent = convertToCSV(downloadedData);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Generate filename similar to JSON file
+    const safeStart = formData.startTimestamp.utc().format('YYYY-MM-DDTHH:mm:ss[Z]').replace(/[:+]/g, '_');
+    const filename = `sensor_${formData.sensorIndex}_${safeStart}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Custom styles for react-select to match Material UI
@@ -246,100 +325,101 @@ export default function Home() {
         px: 2,
       }}
     >
-      <Container maxWidth="md">
+      <Container maxWidth="lg">
         <Paper elevation={3} sx={{ p: 4 }}>
           <Box sx={{ textAlign: 'center', mb: 4 }}>
             <Typography variant="h3" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>
               PurpleAir Data Downloader
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Download historical sensor data from PurpleAir
+            Download  real-time observation sensor data from PurpleAir sensor
             </Typography>
           </Box>
 
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <form onSubmit={handleSubmit}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <Alert severity="info" sx={{ mb: 1 }}>
-                  Due to API points, the time selection has been restricted to 60 mins at max.
-                </Alert>
-                <TextField
-                  label="Sensor Index"
-                  name="sensorIndex"
-                  value={formData.sensorIndex}
-                  onChange={handleChange}
-                  required
-                  fullWidth
-                  placeholder="Enter sensor index (e.g., 123456)"
-                  variant="outlined"
-                />
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <TextField
+                    label="Sensor Index"
+                    name="sensorIndex"
+                    value={formData.sensorIndex}
+                    onChange={handleChange}
+                    required
+                    fullWidth
+                    placeholder="Enter sensor index (e.g., 123456)"
+                    variant="outlined"
+                  />
 
-                <TextField
-                  label="API Key"
-                  name="apiKey"
-                  type={showApiKey ? 'text' : 'password'}
-                  value={formData.apiKey}
-                  onChange={handleChange}
-                  required
-                  fullWidth
-                  placeholder="Enter your PurpleAir API key"
-                  variant="outlined"
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          aria-label="toggle password visibility"
-                          onClick={() => setShowApiKey(!showApiKey)}
-                          onMouseDown={(e) => e.preventDefault()}
-                          edge="end"
-                        >
-                          {showApiKey ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
+                  <TextField
+                    label="API Key"
+                    name="apiKey"
+                    type={showApiKey ? 'text' : 'password'}
+                    value={formData.apiKey}
+                    onChange={handleChange}
+                    required
+                    fullWidth
+                    placeholder="Enter your PurpleAir API key"
+                    variant="outlined"
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            aria-label="toggle password visibility"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            onMouseDown={(e) => e.preventDefault()}
+                            edge="end"
+                          >
+                            {showApiKey ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Box>
 
-                <DateTimePicker
-                  label="Start Timestamp (UTC)"
-                  value={formData.startTimestamp}
-                  onChange={handleStartTimeChange}
-                  slotProps={{
-                    textField: {
-                      required: true,
-                      fullWidth: true,
-                      variant: 'outlined',
-                      helperText: 'Select date and time (up to minutes)',
-                    },
-                  }}
-                  views={['year', 'month', 'day', 'hours', 'minutes']}
-                  format="YYYY-MM-DD HH:mm"
-                />
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <DateTimePicker
+                    label="Start Timestamp (UTC)"
+                    value={formData.startTimestamp}
+                    onChange={handleStartTimeChange}
+                    slotProps={{
+                      textField: {
+                        required: true,
+                        fullWidth: true,
+                        variant: 'outlined',
+                        helperText: 'Select date and time (up to minutes)',
+                      },
+                    }}
+                    views={['year', 'month', 'day', 'hours', 'minutes']}
+                    format="YYYY-MM-DD HH:mm"
+                  />
 
-                <DateTimePicker
-                  label="End Timestamp (UTC)"
-                  value={formData.endTimestamp}
-                  onChange={handleEndTimeChange}
-                  minDateTime={formData.startTimestamp || undefined}
-                  maxDateTime={
-                    formData.startTimestamp
-                      ? formData.startTimestamp.add(60, 'minute')
-                      : undefined
-                  }
-                  disabled={!formData.startTimestamp}
-                  slotProps={{
-                    textField: {
-                      required: true,
-                      fullWidth: true,
-                      variant: 'outlined',
-                      helperText: formData.startTimestamp
-                        ? 'Select date and time (max 60 minutes after start time)'
-                        : 'Please select start timestamp first',
-                    },
-                  }}
-                  views={['year', 'month', 'day', 'hours', 'minutes']}
-                  format="YYYY-MM-DD HH:mm"
-                />
+                  <DateTimePicker
+                    label="End Timestamp (UTC)"
+                    value={formData.endTimestamp}
+                    onChange={handleEndTimeChange}
+                    minDateTime={formData.startTimestamp || undefined}
+                    maxDateTime={
+                      formData.startTimestamp
+                        ? formData.startTimestamp.add(60, 'minute')
+                        : undefined
+                    }
+                    disabled={!formData.startTimestamp}
+                    slotProps={{
+                      textField: {
+                        required: true,
+                        fullWidth: true,
+                        variant: 'outlined',
+                        helperText: formData.startTimestamp
+                          ? 'Select date and time (max 60 minutes after start time)'
+                          : 'Please select start timestamp first',
+                      },
+                    }}
+                    views={['year', 'month', 'day', 'hours', 'minutes']}
+                    format="YYYY-MM-DD HH:mm"
+                  />
+                </Box>
 
               <FormControl fullWidth>
                 <InputLabel id="fields-label" shrink>
@@ -350,7 +430,11 @@ export default function Home() {
                     isMulti
                     name="fields"
                     options={fieldOptions}
-                    value={formData.fields}
+                    value={
+                      formData.fields.length === ALL_FIELDS.length
+                        ? [{ value: SELECT_ALL_VALUE, label: 'Select All Fields' }, ...formData.fields]
+                        : formData.fields
+                    }
                     onChange={handleFieldsChange}
                     styles={selectStyles}
                     placeholder="Select fields..."
@@ -359,7 +443,7 @@ export default function Home() {
                   />
                 </Box>
                 <FormHelperText>
-                  All fields are selected by default. You can search and select/deselect fields.
+                  All fields are selected by default. You can search and select/deselect fields. Use &quot;Select All Fields&quot; to quickly select all options.
                 </FormHelperText>
               </FormControl>
 
@@ -375,35 +459,118 @@ export default function Home() {
                 </Alert>
               )}
 
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                fullWidth
-                size="large"
-                disabled={loading || !isFormValid()}
-                sx={{ py: 1.5, mt: 1 }}
-              >
-                {loading ? 'Downloading...' : 'Download Data'}
-              </Button>
-
-              {downloadUrl && (
+              <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
                 <Button
-                  href={downloadUrl}
-                  download
+                  type="submit"
                   variant="contained"
-                  color="success"
+                  color="primary"
                   fullWidth
                   size="large"
-                  component="a"
+                  disabled={loading || !isFormValid()}
                   sx={{ py: 1.5 }}
                 >
-                  Download JSON File
+                  {loading ? 'Downloading...' : 'Download Data'}
                 </Button>
-              )}
+
+                {downloadUrl && (
+                  <>
+                    <Button
+                      href={downloadUrl}
+                      download
+                      variant="contained"
+                      color="success"
+                      fullWidth
+                      size="large"
+                      component="a"
+                      sx={{ py: 1.5 }}
+                    >
+                      Download JSON File
+                    </Button>
+                    <Button
+                      onClick={handleDownloadCSV}
+                      variant="contained"
+                      color="info"
+                      fullWidth
+                      size="large"
+                      disabled={!downloadedData}
+                      sx={{ py: 1.5 }}
+                    >
+                      Download CSV File
+                    </Button>
+                  </>
+                )}
+              </Box>
               </Box>
             </form>
           </LocalizationProvider>
+
+          {downloadedData && (
+            <Box sx={{ mt: 4 }}>
+              <Card elevation={2}>
+                <CardContent>
+                  <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 2 }}>
+                    Downloaded Data
+                  </Typography>
+                  
+                  <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip 
+                      label={`Sensor Index: ${downloadedData.sensor_index || 'N/A'}`} 
+                      color="primary" 
+                      variant="outlined" 
+                    />
+                    <Chip 
+                      label={`Data Points: ${downloadedData.data?.length || 0}`} 
+                      color="secondary" 
+                      variant="outlined" 
+                    />
+                    <Chip 
+                      label={`API Version: ${downloadedData.api_version || 'N/A'}`} 
+                      variant="outlined" 
+                    />
+                  </Box>
+
+                  {downloadedData.data && downloadedData.data.length > 0 && (
+                    <TableContainer sx={{ maxHeight: 600, mt: 2 }}>
+                      <Table stickyHeader size="small">
+                        <TableHead>
+                          <TableRow>
+                            {downloadedData.fields?.map((field, index) => (
+                              <TableCell
+                                key={index}
+                                sx={{
+                                  fontWeight: 'bold',
+                                  backgroundColor: theme.palette.mode === 'dark' 
+                                    ? theme.palette.grey[800] 
+                                    : theme.palette.grey[200],
+                                }}
+                              >
+                                {field}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {downloadedData.data.map((row, rowIndex) => (
+                            <TableRow key={rowIndex} hover>
+                              {row.map((cell, cellIndex) => (
+                                <TableCell key={cellIndex}>
+                                  {typeof cell === 'number' 
+                                    ? cell.toLocaleString(undefined, { 
+                                        maximumFractionDigits: 2 
+                                      })
+                                    : String(cell)}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </Box>
+          )}
 
           <Box sx={{ mt: 4, pt: 3, borderTop: 1, borderColor: 'divider' }}>
             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'semibold' }}>

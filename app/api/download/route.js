@@ -45,6 +45,31 @@ export async function POST(request) {
 
     const data = await response.json();
 
+    // Sort data by timestamp in ascending order
+    if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+      // Find the index of time_stamp field (usually first field)
+      const timeStampIndex = data.fields?.findIndex(field => 
+        field === 'time_stamp' || field === 'timestamp'
+      ) ?? 0;
+
+      data.data.sort((a, b) => {
+        const timeA = a[timeStampIndex];
+        const timeB = b[timeStampIndex];
+        
+        // Handle both string timestamps (ISO format) and numeric timestamps
+        if (typeof timeA === 'string' && typeof timeB === 'string') {
+          return new Date(timeA).getTime() - new Date(timeB).getTime();
+        } else if (typeof timeA === 'number' && typeof timeB === 'number') {
+          return timeA - timeB;
+        } else {
+          // Fallback: convert to numbers
+          const numA = typeof timeA === 'string' ? new Date(timeA).getTime() : timeA;
+          const numB = typeof timeB === 'string' ? new Date(timeB).getTime() : timeB;
+          return numA - numB;
+        }
+      });
+    }
+
     // Create data directory if it doesn't exist
     const dataDir = path.join(process.cwd(), 'public', 'downloads');
     if (!fs.existsSync(dataDir)) {
@@ -67,6 +92,7 @@ export async function POST(request) {
       downloadUrl,
       filename,
       dataPoints: data.data?.length || 0,
+      data: data, // Include the full data in the response
     });
   } catch (error) {
     console.error('Error downloading data:', error);

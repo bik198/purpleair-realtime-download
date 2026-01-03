@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "PurpleAir Data Downloader",
-  description: "Download historical sensor data from PurpleAir",
+  description: "Download  real-time observation sensor data from PurpleAir sensor",
 };
 
 export default function RootLayout({ children }) {
