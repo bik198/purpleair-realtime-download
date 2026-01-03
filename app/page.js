@@ -86,7 +86,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [downloadUrl, setDownloadUrl] = useState('');
+  const [downloadFilename, setDownloadFilename] = useState('');
+  const [jsonContent, setJsonContent] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [downloadedData, setDownloadedData] = useState(null);
 
@@ -199,7 +200,8 @@ export default function Home() {
     setLoading(true);
     setError('');
     setSuccess('');
-    setDownloadUrl('');
+    setDownloadFilename('');
+    setJsonContent('');
     setDownloadedData(null);
 
     // Convert selected options to array of field values, excluding "Select All"
@@ -233,7 +235,8 @@ export default function Home() {
       }
 
       setSuccess('Data downloaded successfully! You can view the data in the table below. You can also download the data in JSON format or CSV format. ');
-      setDownloadUrl(data.downloadUrl);
+      setDownloadFilename(data.filename);
+      setJsonContent(data.jsonContent);
       setDownloadedData(data.data);
     } catch (err) {
       setError(err.message || 'An error occurred');
@@ -266,6 +269,23 @@ export default function Home() {
     return [header, ...rows].join('\n');
   };
 
+  // Function to download JSON
+  const handleDownloadJSON = () => {
+    if (!jsonContent || !downloadFilename) return;
+
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', downloadFilename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Function to download CSV
   const handleDownloadCSV = () => {
     if (!downloadedData) return;
@@ -285,6 +305,7 @@ export default function Home() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Custom styles for react-select to match Material UI
@@ -472,16 +493,15 @@ export default function Home() {
                   {loading ? 'Downloading...' : 'Download Data'}
                 </Button>
 
-                {downloadUrl && (
+                {downloadFilename && (
                   <>
                     <Button
-                      href={downloadUrl}
-                      download
+                      onClick={handleDownloadJSON}
                       variant="contained"
                       color="success"
                       fullWidth
                       size="large"
-                      component="a"
+                      disabled={!jsonContent}
                       sx={{ py: 1.5 }}
                     >
                       Download JSON File

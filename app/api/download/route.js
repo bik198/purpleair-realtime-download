@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 
 export async function POST(request) {
   try {
@@ -70,29 +68,17 @@ export async function POST(request) {
       });
     }
 
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'public', 'downloads');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-
     // Generate filename
     const safeStart = startTimestamp.replace(/[:+]/g, '_');
     const filename = `sensor_${sensorIndex}_${safeStart}.json`;
-    const filePath = path.join(dataDir, filename);
 
-    // Save file
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-
-    // Return download URL
-    const downloadUrl = `/downloads/${filename}`;
-
+    // Return data directly (no file system operations for serverless compatibility)
     return NextResponse.json({
       success: true,
-      downloadUrl,
       filename,
       dataPoints: data.data?.length || 0,
       data: data, // Include the full data in the response
+      jsonContent: JSON.stringify(data, null, 2), // Include formatted JSON string for download
     });
   } catch (error) {
     console.error('Error downloading data:', error);
