@@ -2,6 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import EmotionRegistry from "./registry";
 import MUIThemeProvider from "./ThemeProvider";
+import Navbar from "./components/Navbar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,6 +27,7 @@ export default function RootLayout({ children }) {
       >
         <EmotionRegistry>
           <MUIThemeProvider>
+            <Navbar />
             {children}
           </MUIThemeProvider>
         </EmotionRegistry>
